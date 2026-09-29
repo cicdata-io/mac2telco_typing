@@ -33,15 +33,29 @@ Hai script cùng một luồng và cùng giao diện:
 
 ## Chọn tốc độ
 
-| Chế độ | VT | VNPT |
-|---|---|---|
-| Nhanh – mạng tốt | cụm 12 ký tự, nghỉ 30ms | 3ms/ký tự, gần như không nghỉ |
-| Vừa | cụm 4 ký tự, nghỉ 50ms | 12ms/ký tự |
-| **Chậm – mạng yếu (khuyên dùng)** | 1 ký tự / 40ms, nghỉ thêm 40ms sau ký tự cần Shift | như VT |
-| Rất chậm – mạng rất lag | 1 ký tự / 100ms | như VT |
+**VT** (4 chế độ, mặc định *Chậm*):
 
-Cả hai đều nghỉ dài sau mỗi 150 ký tự (0.2–1s tuỳ chế độ) để remote kịp xả buffer.
-**Mẹo:** dùng *Nhanh* khi test ở máy mình. Vào máy ảo thì bắt đầu với *Chậm*; thấy ổn thì lần sau hạ xuống *Vừa*.
+| Chế độ | Cách gõ |
+|---|---|
+| Nhanh – mạng tốt | cụm 12 ký tự, nghỉ 30ms |
+| Vừa | cụm 4 ký tự, nghỉ 50ms |
+| **Chậm – mạng yếu (khuyên dùng)** | 1 ký tự / 40ms, nghỉ thêm 40ms sau ký tự cần Shift |
+| Rất chậm – mạng rất lag | 1 ký tự / 100ms |
+
+**VNPT** (5 chế độ, mặc định *Vừa*). Tốc độ là lý thuyết, không tính phần nghỉ sau Enter và nghỉ dài:
+
+| Chế độ | ~ký tự/giây | 1000 ký tự mất |
+|---|---|---|
+| Siêu nhanh – máy local, LAN | ~400 | ~3s |
+| Nhanh | ~180 | ~6s |
+| **Vừa (khuyên dùng)** | ~90 | ~12s |
+| Chậm – mạng yếu | ~35 | ~30s |
+| Rất chậm – mạng rất lag | ~12 | ~1.5 phút |
+
+VNPT **giữ Shift liên tục** qua cả chuỗi chữ hoa / ký hiệu (vd. `HELLO`, `{}`), không nhấn/nhả Shift cho từng ký tự nên gõ code nhanh hơn hẳn.
+
+Cả hai đều nghỉ dài sau mỗi 150 ký tự để remote kịp xả buffer (ở các chế độ nhanh nhất thì không nghỉ).
+**Mẹo:** thử chế độ nhanh nhất trước. Nếu sót ký tự hoặc sai hoa/thường thì lùi xuống 1 bậc. Script nhớ lựa chọn cho lần sau.
 
 ---
 
@@ -110,7 +124,7 @@ Mọi thông số nằm ở phần `CONFIG` đầu file, và trong `setProfile(.
 - `startDelay`: thời gian đếm ngược (mặc định 3s)
 - `breatherEvery`: cứ bao nhiêu ký tự thì nghỉ dài 1 lần (mặc định 150)
 - **VT**: `setProfile(chunkSize, chunkDelay, lineDelay, shiftExtra, breatherDelay)`
-- **VNPT**: `setProfile(charDelay, lineDelay, shiftExtra, breatherDelay)`, đơn vị giây
+- **VNPT**: `setProfile(charDelay, lineDelay, shiftExtra, breatherDelay, keyHold, shiftHold)`, đơn vị giây. `keyHold` là thời gian giữ mỗi phím, `shiftHold` là thời gian chờ sau khi nhấn Shift.
 
 Mạng lag, sót ký tự hoặc sai hoa/thường thì tăng `chunkDelay`/`charDelay` và `shiftExtra`.
 

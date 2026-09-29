@@ -20,7 +20,7 @@ on run
 	if not inputSourceOK() then return
 	-- 2) Chọn tốc độ theo tình trạng mạng
 	set profiles to {"Nhanh – mạng tốt", "Vừa", "Chậm – mạng yếu (khuyên dùng)", "Rất chậm – mạng rất lag"}
-	set idx to pickProfile(profiles, prefKey)
+	set idx to pickProfile(profiles, prefKey, 3)
 	if idx = 0 then return
 	if idx = 1 then
 		setProfile(12, 0.03, 0.08, 0, 0.2)
@@ -128,13 +128,13 @@ on getInputSource()
 	end try
 	return src
 end getInputSource
--- Hộp chọn tốc độ, mặc định là chế độ dùng lần trước. Trả về 1..4, 0 nếu Hủy.
-on pickProfile(profiles, key)
-	set lastIdx to 3
+-- Hộp chọn tốc độ, mặc định là chế độ dùng lần trước (lần đầu: defaultIdx). Trả về index, 0 nếu Hủy.
+on pickProfile(profiles, key, defaultIdx)
+	set lastIdx to defaultIdx
 	try
 		set lastIdx to (do shell script "defaults read vn.autotype " & key) as integer
 	end try
-	if lastIdx < 1 or lastIdx > (count of profiles) then set lastIdx to 3
+	if lastIdx < 1 or lastIdx > (count of profiles) then set lastIdx to defaultIdx
 	set picked to choose from list profiles with title "Tốc độ gõ" with prompt "Mạng tới máy ảo đang thế nào?" default items {item lastIdx of profiles}
 	if picked is false then return 0
 	set picked to item 1 of picked

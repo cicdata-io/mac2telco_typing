@@ -5,12 +5,14 @@ use scripting additions
 -- ============ CONFIG ============
 property startDelay : 3 -- đếm ngược trước khi gõ (s)
 property breatherEvery : 150 -- cứ N ký tự thì nghỉ dài 1 lần cho remote xả buffer
-property prefKey : "vnpt.profile" -- nhớ chế độ tốc độ lần trước (defaults domain vn.autotype)
+property prefKey : "vnpt.speed" -- nhớ chế độ tốc độ lần trước (defaults domain vn.autotype)
 -- Các giá trị dưới được gán lại theo chế độ chọn lúc chạy
 property charDelay : 0.04 -- nghỉ sau mỗi ký tự (s)
 property lineDelay : 0.35 -- nghỉ sau Enter (s)
 property shiftExtra : 0.04 -- nghỉ thêm sau ký tự cần Shift (s)
 property breatherDelay : 0.6 -- thời gian nghỉ dài (s)
+property keyHold : 0.004 -- thời gian giữ 1 phím (s)
+property shiftHold : 0.012 -- chờ sau khi nhấn Shift cho VM kịp nhận (s)
 -- DỪNG: bật Caps Lock, giữ Fn / 🌐, hoặc giữ ESC
 on run
 	-- 0) Chuẩn bị bộ gõ Swift (chỉ biên dịch lần đầu / khi code đổi)
@@ -19,32 +21,35 @@ on run
 	-- 1) Kiểm tra bộ gõ
 	if not inputSourceOK() then return
 	-- 2) Chọn tốc độ theo tình trạng mạng
-	set profiles to {"Nhanh – mạng tốt", "Vừa", "Chậm – mạng yếu (khuyên dùng)", "Rất chậm – mạng rất lag"}
-	set idx to pickProfile(profiles, prefKey)
+	set profiles to {"Siêu nhanh – ~400 ký tự/s (máy local, LAN)", "Nhanh – ~180 ký tự/s", "Vừa – ~90 ký tự/s (khuyên dùng)", "Chậm – ~35 ký tự/s (mạng yếu)", "Rất chậm – ~12 ký tự/s (mạng rất lag)"}
+	set idx to pickProfile(profiles, prefKey, 3)
 	if idx = 0 then return
+	--            charDelay lineDelay shiftExtra breather keyHold shiftHold
 	if idx = 1 then
-		setProfile(0.003, 0.025, 0, 0)
+		setProfile(0.001, 0.01, 0, 0, 0.001, 0.003)
 	else if idx = 2 then
-		setProfile(0.012, 0.1, 0.01, 0.3)
+		setProfile(0.003, 0.025, 0, 0, 0.002, 0.006)
 	else if idx = 3 then
-		setProfile(0.04, 0.35, 0.04, 0.6)
+		setProfile(0.008, 0.06, 0.004, 0.2, 0.003, 0.01)
+	else if idx = 4 then
+		setProfile(0.025, 0.25, 0.02, 0.5, 0.004, 0.012)
 	else
-		setProfile(0.1, 0.6, 0.08, 1.0)
+		setProfile(0.08, 0.6, 0.06, 1.0, 0.005, 0.015)
 	end if
 	-- 3) Đọc clipboard (qua Swift để đếm đúng như lúc gõ) + ước tính thời gian
 	set stats to splitText(do shell script quoted form of typer & " stats", "|")
 	set totalChars to (item 1 of stats) as integer
 	set lineCount to (item 2 of stats) as integer
 	set shiftCount to (item 3 of stats) as integer
-	set unsupported to (item 4 of stats) as integer
-	-- 7ms = nhấn/nhả phím, 22ms = giữ/nhả Shift (cố định trong code Swift)
-	set estSec to totalChars * (charDelay + 0.007) + lineCount * lineDelay + shiftCount * (shiftExtra + 0.022) + (totalChars div breatherEvery) * breatherDelay
+	set shiftRuns to (item 4 of stats) as integer -- Shift được giữ qua cả chuỗi -> chỉ tốn thời gian mỗi lần nhấn/nhả
+	set unsupported to (item 5 of stats) as integer
+	set estSec to totalChars * (charDelay + keyHold) + lineCount * lineDelay + shiftCount * shiftExtra + shiftRuns * (shiftHold * 1.5 + keyHold) + (totalChars div breatherEvery) * breatherDelay
 	set estSec to round estSec rounding up
 	if not confirmStart(item idx of profiles, lineCount, totalChars, estSec, unsupported, "AutoType VNPT") then return
 	set t0 to current date
 	delay startDelay
 	-- 4) Gõ
-	set envVars to "AT_CHAR_MS=" & toMs(charDelay) & " AT_LINE_MS=" & toMs(lineDelay) & " AT_SHIFT_MS=" & toMs(shiftExtra) & " AT_BREATHER_MS=" & toMs(breatherDelay) & " AT_BREATHER_EVERY=" & breatherEvery
+	set envVars to "AT_CHAR_MS=" & toMs(charDelay) & " AT_LINE_MS=" & toMs(lineDelay) & " AT_SHIFT_MS=" & toMs(shiftExtra) & " AT_BREATHER_MS=" & toMs(breatherDelay) & " AT_BREATHER_EVERY=" & breatherEvery & " AT_HOLD_MS=" & toMs(keyHold) & " AT_SHIFT_HOLD_MS=" & toMs(shiftHold)
 	set outcome to splitText(do shell script envVars & " " & quoted form of typer & " type", "|")
 	set skippedNote to ""
 	if (item 3 of outcome) as integer > 0 then set skippedNote to " (bỏ qua " & (item 3 of outcome) & " ký tự)"
@@ -55,11 +60,13 @@ on run
 		display notification "Hoàn tất " & lineCount & " dòng trong " & ((current date) - t0) & "s" & skippedNote with title "AutoType VNPT"
 	end if
 end run
-on setProfile(cd, ld, se, bd)
+on setProfile(cd, ld, se, bd, kh, sh)
 	set charDelay to cd
 	set lineDelay to ld
 	set shiftExtra to se
 	set breatherDelay to bd
+	set keyHold to kh
+	set shiftHold to sh
 end setProfile
 on toMs(s)
 	return (round (s * 1000)) as integer
@@ -103,6 +110,8 @@ let lineDelay = ms(\"AT_LINE_MS\", 350)
 let shiftExtra = ms(\"AT_SHIFT_MS\", 40)
 let breatherDelay = ms(\"AT_BREATHER_MS\", 600)
 let breatherEvery = Int(env[\"AT_BREATHER_EVERY\"] ?? \"\") ?? 150
+let keyHold = ms(\"AT_HOLD_MS\", 4) // thời gian giữ 1 phím (down -> up)
+let shiftHold = ms(\"AT_SHIFT_HOLD_MS\", 12) // chờ sau khi nhấn Shift cho VM kịp nhận
 
 // Mã phím vật lý theo bàn phím US: (keycode, cần Shift)
 var keyMap: [Character: (CGKeyCode, Bool)] = [\" \": (49, false), \"\\n\": (36, false), \"\\t\": (48, false)]
@@ -141,32 +150,41 @@ func post(_ code: CGKeyCode, down: Bool, shift: Bool) {
     if shift { e?.flags = .maskShift }
     e?.post(tap: .cghidEventTap)
 }
-func press(_ code: CGKeyCode, shift: Bool) {
-    if shift {
+
+// Shift được giữ liên tục qua cả chuỗi ký tự cần Shift (vd. \"HELLO\", \"{}\") thay vì nhấn/nhả từng ký tự
+var shiftDown = false
+func setShift(_ down: Bool) {
+    if down == shiftDown { return }
+    if down {
         post(shiftKey, down: true, shift: true)
-        usleep(12_000) // cho VM kịp nhận Shift
-    }
-    post(code, down: true, shift: shift)
-    usleep(4_000)
-    post(code, down: false, shift: shift)
-    if shift {
-        usleep(6_000) // giữ Shift thêm chút rồi mới nhả
+        usleep(shiftHold) // cho VM kịp nhận Shift
+    } else {
+        usleep(shiftHold / 2) // giữ Shift thêm chút rồi mới nhả
         post(shiftKey, down: false, shift: false)
-        usleep(4_000)
+        usleep(keyHold)
     }
+    shiftDown = down
+}
+func press(_ code: CGKeyCode, shift: Bool) {
+    setShift(shift)
+    post(code, down: true, shift: shift)
+    usleep(keyHold)
+    post(code, down: false, shift: shift)
 }
 
 let text = normalized(NSPasteboard.general.string(forType: .string) ?? \"\")
 
-// \"stats\": in ra \"ký tự|dòng|ký tự cần Shift|ký tự không gõ được\" để AppleScript ước tính thời gian
+// \"stats\": in ra \"ký tự|dòng|ký tự cần Shift|số lần nhấn Shift|ký tự không gõ được\" để AppleScript ước tính thời gian
 if CommandLine.arguments.dropFirst().first == \"stats\" {
-    var lines = 1, shifted = 0, unsupported = 0
+    var lines = 1, shifted = 0, shiftRuns = 0, unsupported = 0, prevShift = false
     for ch in text {
         guard let (code, shift) = keyMap[ch] else { unsupported += 1; continue }
         if code == 36 { lines += 1 }
         if shift { shifted += 1 }
+        if shift && !prevShift { shiftRuns += 1 }
+        prevShift = shift
     }
-    print(\"\\(text.count)|\\(lines)|\\(shifted)|\\(unsupported)\")
+    print(\"\\(text.count)|\\(lines)|\\(shifted)|\\(shiftRuns)|\\(unsupported)\")
     exit(0)
 }
 
@@ -174,6 +192,7 @@ if CommandLine.arguments.dropFirst().first == \"stats\" {
 var line = 1, skipped = 0, sinceBreather = 0
 for ch in text {
     if shouldAbort() {
+        setShift(false) // không bao giờ để kẹt Shift trong máy ảo
         print(\"abort|\\(line)|\\(skipped)\")
         exit(0)
     }
@@ -192,6 +211,7 @@ for ch in text {
         usleep(breatherDelay) // nghỉ dài cho remote xả buffer
     }
 }
+setShift(false)
 print(\"done|\\(line)|\\(skipped)\")"
 end swiftSource
 
@@ -228,13 +248,13 @@ on getInputSource()
 	end try
 	return src
 end getInputSource
--- Hộp chọn tốc độ, mặc định là chế độ dùng lần trước. Trả về 1..4, 0 nếu Hủy.
-on pickProfile(profiles, key)
-	set lastIdx to 3
+-- Hộp chọn tốc độ, mặc định là chế độ dùng lần trước (lần đầu: defaultIdx). Trả về index, 0 nếu Hủy.
+on pickProfile(profiles, key, defaultIdx)
+	set lastIdx to defaultIdx
 	try
 		set lastIdx to (do shell script "defaults read vn.autotype " & key) as integer
 	end try
-	if lastIdx < 1 or lastIdx > (count of profiles) then set lastIdx to 3
+	if lastIdx < 1 or lastIdx > (count of profiles) then set lastIdx to defaultIdx
 	set picked to choose from list profiles with title "Tốc độ gõ" with prompt "Mạng tới máy ảo đang thế nào?" default items {item lastIdx of profiles}
 	if picked is false then return 0
 	set picked to item 1 of picked
